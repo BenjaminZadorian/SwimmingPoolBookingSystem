@@ -1,0 +1,17 @@
+﻿@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+
+<button @onclick="EditProfile" class="btn btn-outline-primary">Edit Profile</button>
+
+@code {
+	[Parameter]
+	public int Id { get; set; }
+
+	[Parameter]
+	public string Name { get; set; }
+
+	void EditProfile()
+	{
+		NavigationManager.NavigateTo($"/edit-employee/{Name}/{Id}");
+	}
+}

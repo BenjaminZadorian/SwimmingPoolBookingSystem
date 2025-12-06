@@ -1,0 +1,162 @@
+﻿@page "/emp-profile/{Name}/{Id:int}"
+@using Microsoft.AspNetCore.Authorization
+@using System.Text
+@attribute [Authorize(Roles = "Employee")]
+@inject IEmployeeService EmployeeService
+@inject IFacilityService FacilityService
+@inject NavigationManager NavigationManager
+@inject DataService DataService
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+
+	<section class="profile-container">
+
+	<h1 for="profile">Profile: @employee.FirstName</h1>
+
+		<div id="user-info">
+			<label for="name">Name: @employee.FirstName @employee.LastName</label><br />
+			<label for="email">Email: @employee.Email</label><br />
+		</div>
+
+		<div>
+        @if (employee.Facility != null)
+		{
+			<label>Working At Facility: <b>@employee.Facility.Name</b></label>
+		}
+		else
+		{
+			<label>Not Currently Assigned to a Facility</label>
+		}
+	</div>
+
+	<div>
+		@if (employee.WorkDays != string.Empty)
+		{
+			<label>Work Days for the Week: <b>@employee.WorkDays</b></label>
+		}
+		else
+		{
+			<label>Not Currently Assigned to a Work Schedule.</label>
+		}
+	</div>
+
+	<div>
+		@if (toTeach != null && employee.Teaching != false) {
+			<p>Next Lesson to Teach: <b>@toTeach.Type</b>: @toTeach.StartTime.ToString("HH:mm") - @toTeach.EndTime.ToString("HH:mm")</p>
+		} else {
+			<p>You are not currently booked to teach any lessons.</p>
+		}
+	</div>
+
+	<div>
+		<h3>Payment Statistics</h3>
+		<h5>Hours Worked This Month</h5>
+		<p><b>Total Hours</b>: @totalHours</p>
+
+		<h5>Projected Payment This Month</h5>
+		<p><b>Total Payment:</b> £@(totalHours * minimumWage)</p>
+	</div>
+
+	<EditEmployeeButton Name=@employee.FirstName Id="@employee.ID"></EditEmployeeButton>
+
+	<button class="btn btn-primary" @onclick="ExportToCSV">Export Profile Information to CSV</button>
+
+</section>
+
+
+<style>
+	.profile-container {
+		display: flex;
+		flex-direction: column;
+		align-items: center; /* centers horizontally */
+		text-align: center;
+		gap: 0.5rem;
+	}
+
+	h5 {
+		font-size: 1.25rem;
+		font-weight: bold;
+	}
+	
+	p, span, label {
+		font-size: 1.25rem;
+	}
+</style>
+
+@code {
+	[Parameter]
+	public string Name { get; set; }
+
+	[Parameter]
+	public int Id { get; set; }
+
+	EmployeeTable employee { get; set; } = new EmployeeTable
+		{
+			FirstName = string.Empty,
+			LastName = string.Empty,
+			BirthDate = DateTime.MinValue,
+			StartTime = DateTime.MinValue,
+			EndTime = DateTime.MinValue,
+			WorkDays = string.Empty,
+			Teaching = false,
+			Facility = null
+		};
+
+	FacilityTable facility { get; set; }
+
+	LessonTable toTeach { get; set; }
+
+	decimal minimumWage { get; set; } = 15.00m;
+
+	int daysWorked { get; set; } = 0;
+
+	int currentMonth = DateTime.Now.Month;
+
+	int totalHours { get; set; } = 0;
+	decimal totalPayment { get; set; } = 0.00m;
+	int totalWeeks { get; set; }
+
+	int dailyHours { get; set; } = 0;
+
+	protected override async Task OnInitializedAsync()
+	{
+		employee = await EmployeeService.GetEmployeeById((int)Id);
+		toTeach = await EmployeeService.GetToTeach((int)Id);
+
+		if (employee.FacilityID != null) {
+			facility = await FacilityService.GetFacilityById((int)employee.FacilityID);
+		}
+
+		daysWorked = new List<string>(employee.WorkDays.Split(',')).Count();
+
+		dailyHours = (int)(employee.EndTime - employee.StartTime).TotalHours;
+
+		// 7 day weeks instead of rounding to whenever the month ends for payments
+		int totalDays = DateTime.DaysInMonth(DateTime.Now.Year, currentMonth);
+		totalWeeks = (int)Math.Ceiling(totalDays / 7.0);
+
+		totalHours = ((dailyHours * daysWorked) * totalWeeks);
+	}
+
+	public async Task ExportToCSV() {
+		var csv = new StringBuilder();
+
+		csv.AppendLine("Field,Value");
+		csv.AppendLine($"First Name,{employee.FirstName}");
+		csv.AppendLine($"Last Name,{employee.LastName}");
+		csv.AppendLine($"Email,{employee.Email}");
+		csv.AppendLine($"Facility,{employee.Facility?.Name ?? "Not Assigned"}");
+		csv.AppendLine($"Work Days,{(string.IsNullOrWhiteSpace(employee.WorkDays) ? "Not Assigned" : employee.WorkDays)}");
+		csv.AppendLine($"Teaching,{(employee.Teaching == true ? "True" : "No")}");
+		csv.AppendLine($"Hours Worked,{totalHours}");
+		csv.AppendLine($"Total Payment (£),{(totalHours * minimumWage):0.00}");
+
+		string csvFileName = $"EmployeeProfile_{employee.FirstName}_{employee.LastName}.csv";
+		byte[] csvFileBytes = Encoding.UTF8.GetBytes(csv.ToString());
+		string base64 = Convert.ToBase64String(csvFileBytes);
+		string dataURL = $"data:text/csv;base64,{base64}";
+
+		await JSRuntime.InvokeVoidAsync("downloadCsvFile", csvFileName, dataURL);
+	}
+
+}

@@ -1,0 +1,224 @@
+﻿@page "/facility-management/{Name}/{Id:int}"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Employee")]
+@inject IEmployeeService EmployeeService
+@inject IFacilityService FacilityService
+@inject IPoolService PoolService
+@inject DataService DataService
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+
+<ErrorAlert @ref="alert"></ErrorAlert>
+
+<h3>Facility Management</h3>
+
+@if (allFacilities != null) {
+	<table class="table table-striped">
+		<thead>
+			<tr>
+				<th>ID</th>
+				<th>Name</th>
+				<th>Address</th>
+				<th>City</th>
+				<th>Post Code</th>
+			</tr>
+		</thead>
+		<tbody>
+			@foreach (var x in allFacilities) {
+				<tr>
+					<td>@x.ID</td>
+					<td>@x.Name</td>
+					<td>@x.Address</td>
+					<td>@x.City</td>
+					<td>@x.PostCode</td>
+					<button class="btn btn-outline-danger" @onclick="() => RemoveFacility(x.ID)">Remove Facility</button>
+				</tr>
+			}
+		</tbody>
+	</table>
+
+	<select class="form-select" @onchange="FacilitySelectionChange">
+		<option value="none">Select Facility</option>
+		@foreach (var f in allFacilities)
+		{
+			<option value="@f.ID">@f.Name</option>
+		}
+	</select>
+
+	<div class="mb-3">
+		<label for="facName">Facility Name</label>
+		<input id="facName" class="form-control" @bind="inputFacName" />
+	</div>
+
+	<div class="mb-3">
+		<label for="facAddress">Address</label>
+		<input id="facAddress" class="form-control" @bind="inputFacAddress" />
+	</div>
+
+	<div class="mb-3">
+		<label for="facCity">City</label>
+		<input id="facCity" class="form-control" @bind="inputFacCity" />
+	</div>
+
+	<div class="mb-3">
+		<label for="facPostCode">Post Code</label>
+		<input id="facPostCode" class="form-control" @bind="inputFacPostCode" />
+	</div>
+
+	<div class="mb-3">
+		<label for="openTime">Opening Time</label>
+		<input id="openTime" type="time" class="form-control" @bind="inputOpenTime" />
+	</div>
+
+	<div class="mb-3">
+		<label for="closeTime">Closing Time</label>
+		<input id="closeTime" type="time" class="form-control" @bind="inputCloseTime" />
+	</div>
+
+	<button class="btn btn-primary" @onclick="CreateFacility">Add Facility</button>
+
+	@if (allPools != null && allEmployees != null) {
+		<h3>All Employees at @selectedFacility.Name</h3>
+		@if(allEmployees.Count() > 0) {
+			<table class="table table-striped">
+				<thead>
+					<tr>
+						<th>Name</th>
+						<th>Email</th>
+					</tr>
+				</thead>
+				<tbody>
+					@foreach (var e in allEmployees)
+					{
+						<tr>
+							<td>@e.FirstName @e.LastName</td>
+							<td>@e.Email</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		} else {
+			<p>No Employees Registered at @selectedFacility.Name</p>
+		}
+
+		<br />
+
+		<h3>All Pools at @selectedFacility.Name</h3>
+		@if (allPools.Count() > 0) {
+			<table class="table table-striped">
+				<thead>
+					<tr>
+						<th>Pool ID</th>
+						<th>Pool Type</th>
+						<th>Booked Status</th>
+					</tr>
+				</thead>
+				<tbody>
+					@foreach (var p in allPools)
+					{
+						<tr>
+							<td>@p.ID</td>
+							<td>@p.Type</td>
+							<td>@p.Booked</td>
+							<button class="btn btn-outline-danger" @onclick="() => RemovePool(p.ID)">Remove Pool</button>
+						</tr>
+					}
+				</tbody>
+			</table>
+		} else {
+			<p>No Registered Pools at @selectedFacility.Name</p>
+		}
+
+		<div class="mb-3">
+			<label for="poolType">Pool Type</label>
+			<input id="poolType" type="text" class="form-control" @bind="inputPoolType" />
+		</div>
+
+		<button class="btn btn-primary" @onclick="CreatePool">Add Pool</button>
+	}
+} else {
+	<p>loading facilities...</p>
+}
+
+@code {
+	private ErrorAlert alert;
+
+	[Parameter]
+	public string Name { get; set; }
+
+	[Parameter]
+	public int Id { get; set; }
+
+	List<FacilityTable> allFacilities { get; set; }
+	List<PoolTable> allPools { get; set; }
+	List<EmployeeTable> allEmployees { get; set; }
+
+	FacilityTable selectedFacility { get; set; }
+
+	// Input Facility Variable
+	string inputFacName { get; set; }
+	string inputFacAddress { get; set; }
+	string inputFacCity { get; set; }
+	string inputFacPostCode { get; set; }
+	TimeOnly inputOpenTime { get; set; }
+	TimeOnly inputCloseTime { get; set; }
+
+	// Input Pool Variables
+	string inputPoolType { get; set; }
+
+
+	protected override async Task OnInitializedAsync()
+	{
+		allFacilities = await FacilityService.GetAllFacilities();
+	}
+
+	async Task FacilitySelectionChange(ChangeEventArgs e)
+	{
+		if (e.Value != null && e.Value.ToString() != "none")
+		{
+			var facilityId = int.Parse(e.Value.ToString());
+			selectedFacility = await FacilityService.GetFacilityById(facilityId);
+			allPools = (await PoolService.GetAllPools()).Where(p => p.Facility?.ID == facilityId).ToList();
+			allEmployees = await EmployeeService.GetEmployeesByFacility(facilityId);
+		}
+		else
+		{
+			alert.ShowErrorText("Error: Invalid facility choice");
+		}
+	}
+
+	async Task CreateFacility() {
+		FacilityTable newFacility = new FacilityTable
+			{
+				Name = inputFacName,
+				Address = inputFacAddress,
+				City = inputFacCity,
+				PostCode = inputFacPostCode,
+				OpenTime = inputOpenTime,
+				CloseTime = inputCloseTime
+			};
+		await FacilityService.AddFacility(newFacility);
+		await JSRuntime.InvokeVoidAsync("location.reload");
+	}
+
+	async Task RemoveFacility(int id) {
+		await FacilityService.DeleteFacility(id);
+		await JSRuntime.InvokeVoidAsync("location.reload");
+	}
+
+	async Task CreatePool() {
+		PoolTable newPool = new PoolTable
+			{
+				Facility = selectedFacility,
+				Type = inputPoolType,
+				Booked = false
+			};
+		await PoolService.AddPool(newPool);
+		await JSRuntime.InvokeVoidAsync("location.reload");
+	}
+
+	async Task RemovePool(int id) {
+		await PoolService.DeletePool(id);
+		await JSRuntime.InvokeVoidAsync("location.reload");
+	}
+}

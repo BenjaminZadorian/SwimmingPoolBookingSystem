@@ -1,0 +1,49 @@
+﻿@page "/order-history/{Name}/{Id:int}"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Customer")]
+@inject ICustomerService CustomerService
+@inject IOrderService OrderService
+@rendermode InteractiveServer
+
+<h3>Your Order History</h3>
+@if (allCustomerOrders != null) {
+		<table class="table table-striped">
+			<thead>
+				<tr>
+					<th>Order ID</th>
+					<th>Item</th>
+					<th>Price</th>
+					<th>Date</th>
+				</tr>
+			</thead>
+			<tbody>
+				@foreach (var o in allCustomerOrders) {
+					<tr>
+						<td>@o.RowID</td>
+						<td>@o.OrderType</td>
+						<td>@o.OrderPrice</td>
+						<td>@o.OrderDate</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+} else {
+	<p>loading order history...</p>
+}
+@code {
+	[Parameter]
+	public string Name { get; set; }
+
+	[Parameter]
+	public int Id { get; set; }
+
+	CustomerTable customer { get; set; }
+
+	List<OrderTable> allCustomerOrders { get; set; }
+
+	protected override async Task OnParametersSetAsync()
+	{
+		customer = await CustomerService.GetCustomerById((int)Id);
+		allCustomerOrders = await OrderService.GetOrdersByCustomer(customer);
+	}
+}

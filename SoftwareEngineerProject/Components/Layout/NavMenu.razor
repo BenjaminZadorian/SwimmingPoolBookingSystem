@@ -1,0 +1,163 @@
+﻿@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ICustomerService CustomerService
+@inject IEmployeeService EmployeeService
+@inject NavigationManager nav
+
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">Byte Facility</a>
+    </div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+    <nav class="flex-column">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span>Home
+            </NavLink>
+        </div>
+
+        <CascadingAuthenticationState>
+
+            <AuthorizeView>
+                <NotAuthorized>
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="register">
+                            <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span>Register
+                        </NavLink>
+                    </div>
+
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="login">
+                            <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span>Login
+                        </NavLink>
+                    </div>
+                </NotAuthorized>
+            </AuthorizeView>
+
+            <AuthorizeView Roles="Employee">
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="@($"/all-customers/{Name}/{Id}")">
+                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span>Customers
+                    </NavLink>
+                </div>
+
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="@($"/emp-profile/{Name}/{Id}")">
+                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span>My Profile
+                    </NavLink>
+                </div>
+
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="@($"/inventory/{Name}/{Id}")">
+                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span>Manage Inventory
+                    </NavLink>
+                </div>
+
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="@($"/add-lesson/{Name}/{Id}")">
+                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span>Lesson Management
+                    </NavLink>
+                </div>
+
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="@($"/facility-order-history/{Name}/{Id}")">
+                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span>Order History
+                    </NavLink>
+                </div>
+
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="@($"/facility-management/{Name}/{Id}")">
+                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span>Facility Management
+                    </NavLink>
+                </div>
+
+            </AuthorizeView>
+
+            <AuthorizeView Roles="Customer">
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="@($"/cust-profile/{Name}/{Id}")">
+                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span>My Profile
+                    </NavLink>
+                </div>
+
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="@($"/membership/{Name}/{Id}")">
+                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span>My Membership
+                    </NavLink>
+                </div>
+
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="@($"/calendar/{Name}/{Id}")">
+                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span>Calendar
+                    </NavLink>
+                </div>
+
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="@($"/book-lesson/{Name}/{Id}")">
+                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span>Lessons
+                    </NavLink>
+                </div>
+
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="@($"/shop/{Name}/{Id}")">
+                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span>Shop
+                    </NavLink>
+                </div>
+
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="@($"/order-history/{Name}/{Id}")">
+                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span>Order History
+                    </NavLink>
+                </div>
+
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="@($"/contact-info")">
+                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span>Contact
+                    </NavLink>
+                </div>
+            </AuthorizeView>
+        </CascadingAuthenticationState>
+    </nav>
+</div>
+
+@code {
+
+    // Set to the logged in users name
+    public string Name { get; set; }
+    // Set to logged in users id
+    public int Id { get; set; }
+
+    public bool IsAuthenticated = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authenticated = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var loggedInUser = authenticated.User;
+        var loggedInRole = loggedInUser?.FindFirstValue(ClaimTypes.Role);
+
+        IsAuthenticated = loggedInUser.Identity.IsAuthenticated;
+
+        if (IsAuthenticated == true)
+        {
+            if (loggedInRole == "Customer")
+            {
+                var tempCustomer = await CustomerService.GetCustomerByEmail(loggedInUser.Identity.Name);
+                Name = tempCustomer.FirstName;
+                Id = tempCustomer.ID;
+            }
+            else
+            {
+                var tempEmployee = await EmployeeService.GetEmployeeByEmail(loggedInUser.Identity.Name);
+                Name = tempEmployee.FirstName;
+                Id = tempEmployee.ID;
+            }
+        }
+    }
+}
+}
+

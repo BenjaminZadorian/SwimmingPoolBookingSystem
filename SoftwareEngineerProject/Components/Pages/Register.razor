@@ -1,0 +1,170 @@
+﻿@using System.ComponentModel.DataAnnotations
+@inject ICustomerService CustomerService
+@inject IEmployeeService EmployeeService
+@inject IFacilityService FacilityService
+@rendermode InteractiveServer
+@page "/register"
+
+
+<h1>Register</h1>
+<div class="row">
+    <div class="col-md-4">
+
+        <ErrorAlert @ref="alert"></ErrorAlert>
+
+        <section>
+            <EditForm Model="Input" method="post" OnValidSubmit="RegisterUser" FormName="Register">
+                <DataAnnotationsValidator />
+                <hr />
+
+                <div class="form-floating mb-3">
+                    <InputText @bind-Value="Input.FirstName" class="form-control" aria-required="true" />
+                    <label for="first-name" class="form-label">First Name</label>
+                    <ValidationMessage For="() => Input.FirstName" class="text-danger" />
+                </div>
+
+                <div class="form-floating mb-3">
+                    <InputText @bind-Value="Input.LastName" class="form-control" aria-required="true" />
+                    <label for="last-name" class="form-label">Last Name</label>
+                    <ValidationMessage For="() => Input.LastName" class="text-danger" />
+                </div>
+
+                <div class="form-floating mb-3">
+                    <InputDate @bind-Value="Input.BirthDate" class="form-control" aria-required="true" />
+                    <label for="birth-date" class="form-label">Birth Date</label>
+                    <ValidationMessage For="() => Input.BirthDate" class="text-danger" />
+                </div>
+
+                <div class="form-floating mb-3">
+                    <InputText @bind-Value="Input.Email" class="form-control" aria-required="true" />
+                    <label for="email" class="form-label">Email</label>
+                    <ValidationMessage For="() => Input.Email" class="text-danger" />
+                </div>
+
+                <div class="form-floating mb-3">
+                    <InputText type="password" @bind-Value="Input.Password" class="form-control" aria-required="true" />
+                    <label for="password" class="form-label">Password</label>
+                    <ValidationMessage For="() => Input.Password" class="text-danger" />
+                </div>
+
+                <div class="form-floating mb-3">
+                    <InputSelect id="role-select" class="form-select" @bind-Value="Input.Role" aria-required="true">
+                        <option value="Customer">Customer</option>
+                        <option value="Employee">Employee</option>
+                    </InputSelect>
+                    <label for="role" class="form-label">Role</label>
+                    <ValidationMessage For="() => Input.Role" class="text-danger" />
+                </div>
+                <div>
+                    <button type="submit" class="w-100 btn btn-lg btn-primary">Register</button>
+                </div>
+            </EditForm>
+        </section>
+    </div>
+</div>
+
+@code {
+    private ErrorAlert alert; 
+
+
+    [SupplyParameterFromForm]
+    private InputModel Input { get; set; } = new();
+
+    public async Task RegisterUser()
+    {
+
+        // Hash password and save the salt and hashed password to the db
+        var (salt, hashed) = HashingService.HashPassword(Input.Password);
+
+
+        bool regResult = false;
+
+        if (Input.Role == "Customer") {
+            regResult = await CustomerService.AddCustomer(new CustomerTable
+            {
+                FirstName = Input.FirstName,
+                LastName = Input.LastName,
+                Email = Input.Email,
+                Password = hashed,
+                BirthDate = Input.BirthDate,
+                Salt = salt,
+                StartDate = new DateTime(DateTime.MinValue.Ticks).AddDays(1),
+                EndDate = new DateTime(DateTime.MinValue.Ticks),
+                PurchasesMade = 0,
+                AttendanceCount = 0,
+                Membership = null
+            });
+
+        } else if (Input.Role == "Employee") {
+            // Keep just in case of reverting the idea of setting time and work days in registration
+            // TimeOnly timeStartTime = TimeOnly.Parse(Input.StartTime);
+            // TimeOnly timeEndTime = TimeOnly.Parse(Input.EndTime);
+
+            regResult = await EmployeeService.AddEmployee(new EmployeeTable
+                {
+                    FirstName = Input.FirstName,
+                    LastName = Input.LastName,
+                    Email = Input.Email,
+                    Password = hashed,
+                    BirthDate = Input.BirthDate,
+                    Salt = salt,
+                    // Set to min values and config later in profile
+                    StartTime = DateTime.MinValue,
+                    EndTime = DateTime.MinValue,
+                    // Set to empty string and config later in profile
+                    WorkDays = "",
+                    Teaching = false,
+                    Facility = null
+                });
+        }
+
+        if (regResult == true)
+        {
+            // Register user success
+            alert.ShowSuccessText("User Registered");
+        }
+        else
+        {
+            // Register user failed
+            alert.ShowErrorText("User not Registered");
+        }
+
+    }
+
+    private class InputModel
+    {
+        [Required]
+        [DataType(DataType.Text)]
+        public string FirstName { get; set; } = "";
+
+        [Required]
+        [DataType(DataType.Text)]
+        public string LastName { get; set; } = "";
+
+        [Required]
+        [DataType(DataType.DateTime)]
+        public DateTime BirthDate { get; set; } = new DateTime(2000, 1, 1);
+
+        [Required]
+        [EmailAddress]
+        public string Email { get; set; } = "";
+
+        [Required]
+        [DataType(DataType.Password)]
+        public string Password { get; set; } = "";
+
+        [Required]
+        [DataType(DataType.Text)]
+        public string Role { get; set; } = "";
+
+        [DataType(DataType.Text)]
+        public string StartTime { get; set; } = "";
+
+        [DataType(DataType.Text)]
+        public string EndTime { get; set; } = "";
+
+        [DataType(DataType.Text)]
+        public string WorkDays { get; set; } = "";
+
+    }
+}

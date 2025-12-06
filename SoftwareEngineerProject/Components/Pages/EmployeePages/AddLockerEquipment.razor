@@ -1,0 +1,257 @@
+﻿@page "/inventory/{Name}/{Id:int}"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Employee")]
+@inject IEmployeeService EmployeeService
+@inject ILockerService LockerService
+@inject IFacilityService FacilityService
+@inject IEquipmentService EquipmentService
+@inject IMerchandiseService MerchandiseService
+@inject DataService DataService
+@inject IJSRuntime JSRunTime
+@rendermode InteractiveServer
+
+<ErrorAlert @ref="alert"></ErrorAlert>
+
+@if (facility != null) {
+	<h3>Lockers For @facility.Name</h3>
+	@*Table of Lockers*@
+	@if (allLockers != null) {
+		@if (allLockers.Count() > 0) {
+			<table class="table">
+				<thead>
+					<tr>
+						<th>Locker ID</th>
+						<th>Rent Finish</th>
+						<th>Owner</th>
+					</tr>
+				</thead>
+				<tbody>
+					@foreach (var l in lockersWithOwners) {
+						<tr>
+							<td>@l.ID</td>
+							@if (l.Owner != null) {
+								<td>@l.EndRent</td>
+								<td>@l.Owner.FirstName @l.Owner.LastName</td>
+							} else {
+								<td>Not Rented</td>
+								<td>No Owner</td>
+							}
+							<button class="btn btn-outline-danger" @onclick="() => RemoveLocker(l.ID)">Remove Locker</button>
+						</tr>
+					}
+				</tbody>
+			</table>
+		} else {
+			<p>No current lockers available.</p>
+		}
+		<button class="btn btn-primary" @onclick="AddLocker">Add Locker at @facility.Name</button>
+	} else {
+		<p>loading lockers...</p>
+	}
+
+	@*Table of Equipment*@
+	<h3>Equipment For @facility.Name</h3>
+	@if (allEquipment != null) {
+		@if (allEquipment.Count() > 0) {
+			<table class="table">
+				<thead>
+					<tr>
+						<th>Equipment ID</th>
+						<th>Type</th>
+						<th>Price</th>
+						<th>Owner</th>
+					</tr>
+				</thead>
+				<tbody>
+					@foreach (var e in equipmentWithOwners)
+					{
+						<tr>
+							<td>@e.ID</td>
+							<td>@e.Type</td>
+							<td>@e.Price</td>
+							@if (e.OwnerID != null) {
+								<td>@e.Owner.FirstName @e.Owner.LastName</td>
+							} else {
+								<td>No Owner</td>
+							}
+							<button class="btn btn-outline-danger" @onclick="() => RemoveEquipment(e.ID)">Remove Equipment</button>
+						</tr>
+					}
+				</tbody>
+			</table>
+		} else {
+			<p>No current equipment available</p>
+		}
+		// Equipment Type
+		<label>Input Item Type</label>
+		<input type="text" @bind-value="inputEquipmentType" />
+		<br />
+
+		// Equipment Price
+		<label>Input Item Price</label>
+		<input type="text" @bind-value="inputEquipmentPrice" />
+		<br />
+
+		<button class="btn btn-primary" @onclick="AddEquipment">Add Equipment to @facility.Name</button>
+	} else {
+		<p>loading equipment...</p>
+	}
+
+	@*Table of Merch*@
+	<h3>Merchandise For @facility.Name</h3>
+	@if (allMerchandise != null) {
+		@if (allMerchandise.Count() > 0) {
+			<table class="table">
+				<thead>
+					<tr>
+						<th>Merchandise ID</th>
+						<th>Type</th>
+						<th>Price</th>
+					</tr>
+				</thead>
+				<tbody>
+					@foreach (var m in allMerchandise) {
+						<tr>
+							<td>@m.ID</td>
+							<td>@m.Type</td>
+							<td>@m.Price</td>
+							<button class="btn btn-outline-danger" @onclick="() => RemoveMerchandise(m.ID)">Remove Merchandise</button>
+						</tr>
+					}
+				</tbody>
+			</table>
+		} else {
+			<p>No available merchandise</p>
+		}
+
+		// Merch Type
+		<label>Input Item Type</label>
+		<input type="text" @bind-value="inputMerchType" />
+		<br />
+
+		// Merch Price
+		<label>Input Item Price</label>
+		<input type="text" @bind-value="inputMerchPrice" />
+		<br />
+		<button class="btn btn-primary" @onclick="AddMerchandise">Add Equipment to @facility.Name</button>
+	} else {
+		<p>loading merchandise...</p>
+	}
+}
+else if (employee != null && employee.FacilityID == null)
+{
+	<p>You are not assigned to a facility</p>
+}
+else
+{
+	<p>loading facility...</p>
+}
+
+
+@code {
+	private ErrorAlert alert;
+
+	[Parameter]
+	public int Id { get; set; }
+
+	[Parameter]
+	public string Name { get; set; }
+
+	FacilityTable facility { get; set; } = new FacilityTable();
+
+	EmployeeTable employee { get; set; } = new EmployeeTable();
+
+	// List Variables
+	public List<MerchandiseTable> allMerchandise { get; set; }
+	public List<LockerTable> allLockers { get; set; }
+	public List<EquipmentTable> allEquipment { get; set; }
+	public List<LockerTable> lockersWithOwners { get; set; }
+	public List<EquipmentTable> equipmentWithOwners { get; set; }
+
+	int maxStorage = 100;
+
+	// Input Variables
+	public string inputEquipmentPrice { get; set; }
+	public string inputEquipmentType { get; set; }
+
+	public string inputMerchPrice { get; set; }
+	public string inputMerchType { get; set; }
+
+	protected override async Task OnInitializedAsync()
+	{
+		employee = await EmployeeService.GetEmployeeById((int)Id);
+		if (employee.FacilityID != null) {
+			facility = await FacilityService.GetFacilityById((int)employee.FacilityID);
+			allEquipment = await EquipmentService.GetEquipmentByFacility((int)employee.FacilityID);
+			allLockers = await LockerService.GetLockersByFacility((int)employee.FacilityID);
+			allMerchandise = await MerchandiseService.GetMerchandiseByFacility((int)employee.FacilityID);
+			lockersWithOwners = await LockerService.GetLockerOwners((int)employee.FacilityID);
+			equipmentWithOwners = await EquipmentService.GetEquipmentOwners((int)employee.FacilityID);
+		}
+
+	}
+
+	private async void AddLocker() {
+		LockerTable newLocker = new LockerTable
+			{
+				Rented = false,
+				Facility = facility,
+				OwnerID = null,
+				Owner = null,
+				StartRent = DateTime.MinValue,
+				EndRent = DateTime.MinValue
+			};
+		await LockerService.AddLocker(newLocker);
+		await JSRunTime.InvokeVoidAsync("location.reload");
+	}
+
+	private async void RemoveLocker(int id)	{
+		await LockerService.DeleteLocker(id);
+		await JSRunTime.InvokeVoidAsync("location.reload");
+	}
+
+	private async void AddEquipment() {
+		if (inputEquipmentPrice != null && inputEquipmentType != null) {
+			EquipmentTable newEquipment = new EquipmentTable
+				{
+					Rented = false,
+					Type = inputEquipmentType,
+					Price = decimal.Parse(inputEquipmentPrice),
+					Facility = facility,
+					OwnerID = null,
+					Owner = null,
+					StartRent = DateTime.MinValue,
+					EndRent = DateTime.MinValue
+				};
+			await EquipmentService.AddEquipment(newEquipment);
+			await JSRunTime.InvokeVoidAsync("location.reload");
+		} else {
+			alert.ShowErrorText("Invalid Equipment Price or Type");
+		}
+	}
+
+	private async void RemoveEquipment(int id) {
+		await EquipmentService.DeleteEquipment(id);
+		await JSRunTime.InvokeVoidAsync("location.reload");
+	}
+
+	private async void AddMerchandise() {
+		if (inputMerchPrice != null && inputMerchType != null) {
+			MerchandiseTable newMerch = new MerchandiseTable
+			{
+				Price = decimal.Parse(inputMerchPrice),
+				Facility = facility,
+				Type = inputMerchType
+			};
+			await MerchandiseService.AddMerchandise(newMerch);
+			await JSRunTime.InvokeVoidAsync("location.reload");
+		} else {
+			alert.ShowErrorText("Invalid Merchandise Price or Type");
+		}
+	}
+
+	private async void RemoveMerchandise(int id) {
+		await MerchandiseService.DeleteMerchandise(id);
+		await JSRunTime.InvokeVoidAsync("location.reload");
+	}
+}

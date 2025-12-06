@@ -1,0 +1,194 @@
+﻿@page "/add-lesson/{Name}/{Id:int}"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Employee")]
+@inject IEmployeeService EmployeeService
+@inject IFacilityService FacilityService
+@inject IPoolService PoolService
+@inject ILessonService LessonService
+@inject DataService DataService
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+@if (facility != null && allLessons != null) {
+	<ErrorAlert @ref="alert"></ErrorAlert>
+	<h3>Lessons At @facility.Name</h3>
+	@if (allLessons.Count() > 0) {
+		<table class="table table-striped">
+			<thead>
+				<tr>
+					<th>Lesson ID</th>
+					<th>Lesson Type</th>
+					<th>Person Count</th>
+					<th>Start Time</th>
+					<th>End Time</th>
+					<th>Pool ID</th>
+				</tr>
+			</thead>
+			<tbody>
+				@foreach (var l in allLessons) {
+					<tr>
+						<td>@l.ID</td>
+						<td>@l.Type</td>
+						<td>@l.PersonCount</td>
+						<td>@l.StartTime.ToString("HH:mm")</td>
+						<td>@l.EndTime.ToString("HH:mm")</td>
+						<td>@l.PoolID</td>
+						<button class="btn btn-outline-danger" @onclick="() => CancelLesson(l.ID)">Cancel Lesson</button>
+					</tr>
+				}
+			</tbody>
+		</table>
+
+	} else {
+		<p>No available lessons.</p>
+	}
+
+	// Lesson Type
+	<label>Input Lesson Type</label>
+	<input type="text" @bind-value="inputType" />
+	<br />
+
+	<label>Input Lesson Venue </label> <br />
+	@if (allPools != null)
+	{
+		<select class="form-select" @onchange=PoolSelectionChange>
+			<option value="0">Select a Pool</option>
+			@foreach (var p in allPools)
+			{
+				<option value=@p.ID>@p.ID: @p.Type</option>
+			}
+		</select>
+	}
+
+	// Input Times
+	<label>Input Lesson Start Time</label>
+	<input type="time" @bind="inputStartTime" min=@minTime max=@maxTime step="1800" />
+	<br />
+
+	<label>Input Lesson End Time</label>
+	<input type="time" @bind="inputEndTime" min=@minTime max=@maxTime step="1800" />
+	<br />
+
+	<button class="btn btn-primary" @onclick="CreateLesson">Book A Lesson for @facility.Name</button>
+
+} else if (employee.FacilityID == null) {
+	<p>You are not assigned to a facility</p>
+} else {
+	<p>loading lessons...</p>
+}
+
+
+@code {
+	private ErrorAlert alert;
+
+	[Parameter]
+	public int Id { get; set; }
+
+	[Parameter]
+	public string Name { get; set; }
+
+	FacilityTable facility { get; set; } = new FacilityTable();
+
+	EmployeeTable employee { get; set; } = new EmployeeTable();
+
+	List<LessonTable> allLessons { get; set; }
+	List<PoolTable> allPools { get; set; }
+	HashSet<int> poolFacilityID { get; set; }
+
+	DateTime inputStartTime { get; set; }
+	DateTime inputEndTime { get; set; }
+	string inputType { get; set; }
+	int inputPoolID { get; set; } = 0;
+
+	// Lesson Time Variables
+	public string minTime = "08:00";
+	public string maxTime = "23:00";
+
+	public int maxFacilityVenue = 24;
+
+
+	protected override async Task OnInitializedAsync()
+	{
+		employee = await EmployeeService.GetEmployeeById((int)Id);
+		if (employee.FacilityID != null) {
+			facility = await FacilityService.GetFacilityById((int)employee.FacilityID);
+			// If Lesson & Pool hashtables are not loaded, init them
+			if (!DataService.IsLessonLoaded || !DataService.IsPoolLoaded) {
+				var dbLessons = await LessonService.GetAllLessons();
+				var dbPools = await PoolService.GetAllPools();
+
+				DataService.InitLessonHashTable(maxFacilityVenue);
+				foreach (var l in dbLessons) {
+					DataService.AddLessonData(l.ID.ToString(), l);
+				}
+
+				DataService.InitPoolHashTable(maxFacilityVenue);
+				foreach (var p in dbPools) {
+					DataService.AddPoolData(p.ID.ToString(), p);
+				}
+			}
+
+			allLessons = DataService.LessonHashTable.GetAllEntries().Select(l => l.Value).ToList();
+			allPools = DataService.PoolHashTable.GetAllEntries().Select(p => p.Value).Where(p => p.FacilityID == facility.ID).ToList();
+		}
+	}
+
+	private async Task CancelLesson(int id) {
+		var lessons = DataService.LessonHashTable.Delete(id.ToString());
+		await LessonService.DeleteLesson(id);
+		await JS.InvokeVoidAsync("location.reload");
+	}
+	private async void CreateLesson() {
+
+		// Check Valid Time Range
+		if (inputStartTime > DateTime.Parse(minTime) && inputStartTime < DateTime.Parse(maxTime)
+			&& inputEndTime > DateTime.Parse(minTime) && inputEndTime < DateTime.Parse(maxTime))
+		{
+			// Check if Overlaps with other lessons
+			bool IsOverlapping = allLessons.Any(l => inputStartTime < l.EndTime && inputEndTime > l.StartTime);
+
+			if (inputStartTime < inputEndTime && IsOverlapping == false) 
+			{
+				// Check if input empty
+				if (inputType != null) {
+					//var newPool = await PoolService.GetPoolById(inputPoolID);
+					PoolTable newPool = DataService.PoolHashTable.LookUp(inputPoolID.ToString());
+					LessonTable newLesson = new LessonTable
+						{
+							Type = inputType,
+							PersonCount = 0,
+							StartTime = inputStartTime,
+							EndTime = inputEndTime,
+							Teacher = employee,
+							PoolID = inputPoolID,
+						};
+
+					if (inputPoolID == 0) {
+						alert.ShowErrorText("Please enter a valid pool.");
+						return;
+					} else {
+						await EmployeeService.MakeTeacher(employee.ID);
+						await LessonService.AddLesson(newLesson);
+
+						DataService.LessonHashTable.Insert(newLesson.ID.ToString(), newLesson);
+
+						await JS.InvokeVoidAsync("location.reload");
+					}
+
+				} else 
+				{
+					alert.ShowErrorText("Please enter a valid lesson.");
+				}
+			} else {
+				alert.ShowErrorText("Please enter a valid lesson time.");
+			}
+		} else {
+			alert.ShowErrorText("Please enter a valid lesson time.");
+		}
+	}
+	async void PoolSelectionChange(ChangeEventArgs e) {
+		if (e.Value != null && e.Value.ToString() != "none") {
+			inputPoolID = Int32.Parse(e.Value.ToString());
+		}
+	}
+}

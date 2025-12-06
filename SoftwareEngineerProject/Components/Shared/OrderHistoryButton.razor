@@ -1,0 +1,17 @@
+﻿@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+
+<button @onclick="OrderHistory" class="btn btn-primary">View Order History</button>
+
+@code {
+
+	[Parameter]
+	public string Name { get; set; }
+
+	[Parameter]
+	public int Id { get; set; }
+
+	void OrderHistory() {
+		NavigationManager.NavigateTo($"/order-history/{Name}/{Id}");
+	}
+}

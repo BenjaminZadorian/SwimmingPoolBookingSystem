@@ -1,0 +1,85 @@
+﻿@page "/contact-info"
+@inject IEmployeeService EmployeeService
+@inject IFacilityService FacilityService
+@rendermode InteractiveServer
+
+<h3>Employee Contact Information</h3>
+<h5>If you have any inquires or issues, please email one of our trusted employees.</h5>
+
+@if (allFacilities != null) {
+	<section>
+		<div>
+			<h3>Select the facility that you wish contact</h3>
+			<h3>-- Select a Facility --</h3>
+			<select class="form-select" @onchange="OnSelectionChange">
+				<option value="none">Select Facility</option>
+				@foreach (var f in allFacilities)
+				{
+					<option value=@f.ID>@f.Name</option>
+				}
+			</select>
+		</div>
+
+		@if (allEmployees != null && selectedFacility != null) {
+			@if (allEmployees.Count == 0) {
+				<h5 style="margin-top:50px;">No Available Employees</h5>
+			} else {
+				<div>
+					<br />
+					<h3>Employee Contact Information</h3>
+					<table class="table table-striped">
+						<thead>
+							<tr>
+								<th>Name</th>
+								<th>Contact Information</th>
+							</tr>
+						</thead>
+						<tbody>
+							@foreach (var e in allEmployees)
+							{
+								@if (e.Facility != null)
+								{
+									<tr>
+										<td>@e.FirstName @e.LastName</td>
+										<td>@e.Email</td>
+									</tr>
+								}
+							}
+						</tbody>
+					</table>
+				</div>
+			}
+
+		} else {
+			<h5>Please select a facility</h5>
+		}
+
+
+	</section>
+} else {
+	<h5>loading facilites...</h5>
+}
+
+
+@code {
+	int facilityId { get; set; }
+
+	List<FacilityTable> allFacilities { get; set; }
+	List<EmployeeTable> allEmployees { get; set; }
+
+	FacilityTable selectedFacility { get; set; }
+
+	protected override async Task OnInitializedAsync()
+	{
+		allFacilities = await FacilityService.GetAllFacilities();
+		allEmployees = await EmployeeService.GetAllEmployees();
+	}
+
+	private async Task OnSelectionChange(ChangeEventArgs e) {
+		if (e.Value != null && e.Value.ToString() != "none") {
+			selectedFacility = await FacilityService.GetFacilityById(Int32.Parse(e.Value.ToString()));
+			allEmployees = await EmployeeService.GetEmployeesByFacility(Int32.Parse(e.Value.ToString()));
+		}
+	}
+
+}

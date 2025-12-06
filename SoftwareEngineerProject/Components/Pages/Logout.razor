@@ -1,0 +1,19 @@
+﻿@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Authentication.Cookies
+@using Microsoft.AspNetCore.Http
+@inject NavigationManager NavigationManager
+@inject DataService DataService
+@page "/logout"
+
+@code {
+	[CascadingParameter]
+	public HttpContext? httpContext { get; set; }
+
+
+	protected override async Task OnInitializedAsync()
+	{
+		await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+		NavigationManager.NavigateTo("/");
+	}
+}
+

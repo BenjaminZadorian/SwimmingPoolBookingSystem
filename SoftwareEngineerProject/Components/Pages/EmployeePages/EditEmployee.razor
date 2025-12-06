@@ -1,0 +1,199 @@
+﻿@page "/edit-employee"
+@page "/edit-employee/{Name}/{Id:int}"
+@inject IEmployeeService EmployeeService
+@inject IFacilityService FacilityService
+@inject NavigationManager NavigationManager
+@inject DataService DataService
+@rendermode InteractiveServer
+
+@if (employee != null) {
+	<div style="text-align:center">
+		<h1>@employee.FirstName @employee.LastName: Edit Profile</h1>
+
+		<ErrorAlert @ref="alert"></ErrorAlert>
+
+		<EditForm Model="employee" OnSubmit="EditHandleSubmit" FormName="EditEmployee">
+			<div>
+				<h3>Edit Account Information</h3>
+				<label>Edit First Name: @employee.FirstName</label>
+				<InputText @bind-Value="employee.FirstName"></InputText> <br />
+
+				<label>Edit Last Name: @employee.LastName</label>
+				<InputText @bind-Value="employee.LastName"></InputText> <br />
+
+				<label>Change Email: @employee.Email</label>
+				<InputText @bind-Value="employee.Email"></InputText> <br />
+
+				<label>Edit Birth Date: @employee.BirthDate</label>
+				<InputDate @bind-Value="employee.BirthDate"></InputDate> <br />
+
+				<label>Change Password</label>
+				<InputText @bind-Value="InputPassword"></InputText> <br />
+
+				<label>Repeat New Password</label>
+				<InputText @bind-Value="InputPasswordCheck"></InputText> <br />
+
+			</div>
+			<div>
+				<h3>Edit Work Information</h3>
+				<label>Enter Your Work Facility</label>
+				@if (allFacilities != null)
+				{
+					<select class="form-select" @onchange="FacilitySelectionChange">
+						<option value="none">Select Facility</option>
+						@foreach (var f in allFacilities)
+						{
+							<option value=@f.ID>@f.Name</option>
+						}
+					</select>
+				}
+
+
+				<label>Enter Your Requested Start Time</label>
+				<input type="time" @bind-value="employee.StartTime" min=@minTime max=@maxTime step="1800" /> <br />
+
+				<label>Enter Your Requested End Time</label>
+				<input type="time" @bind-value="employee.EndTime" min=@minTime max=@maxTime step="1800" /> <br />
+
+
+				@if (selectedDays != null)
+				{
+					<label>Enter Your Chosen Work Days</label> <br />
+					@foreach (var x in weekDays)
+					{
+						<label>@x</label>
+						<input type="checkbox" @onchange="e => SelectWorkDay(e.Value, x)" checked="@IsChecked(x)" />
+						<br />
+					}
+					<p>Selected: @string.Join(", ", GetSelectedWorkDays())</p>
+				}
+				else
+				{
+					<p>loading days...</p>
+				}
+
+			</div>
+
+			<button type="submit" class="btn btn-primary">Submit Changes</button> <br /> <br />
+
+
+		</EditForm>
+	</div>
+
+} else {
+	<p>loading profile...</p>
+}
+
+
+@code {
+
+	private ErrorAlert alert;
+
+	[Parameter]
+	public int Id { get; set; }
+
+	[Parameter]
+	public string Name { get; set; }
+
+	[SupplyParameterFromForm]
+	EmployeeTable employee { get; set; }
+
+	// Input Variables
+	public string InputPassword { get; set; } = string.Empty;
+	public string InputPasswordCheck { get; set; } = string.Empty;
+
+	public List<string> weekDays = new List<string>() {"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"};
+
+	public Dictionary<string, bool> selectedDays { get; set; } = new Dictionary<string, bool>();
+
+	public FacilityTable? selectedFacility { get; set; }
+
+	// Employee Work Time Variables
+	public string minTime = "08:00";
+	public string maxTime = "23:00";
+
+	List<FacilityTable> allFacilities { get; set; }
+
+	protected override async Task OnInitializedAsync()
+	{
+		employee = await EmployeeService.GetEmployeeById((int)Id);
+		allFacilities = await FacilityService.GetAllFacilities();
+
+		List<string> employeeWorkDays = employee.WorkDays.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(day => day.Trim()).ToList();
+	}
+
+	async Task EditHandleSubmit() {
+		// Check valid password
+		if (PasswordCheck()) {
+			// Create a new salt for hashed password
+			if (InputPassword != string.Empty) {
+				var (salt, hashed) = HashingService.HashPassword(InputPassword);
+				employee.Password = hashed;
+				employee.Salt = salt;
+			}
+
+			if (selectedFacility != null) {
+				employee.WorkDays = string.Join(",", selectedDays.Where(kvp => kvp.Value).Select(kvp => kvp.Key));
+				if (employee.WorkDays != null && employee.WorkDays != string.Empty) {
+					employee.Facility = selectedFacility;
+					employee.Teaching = null;
+
+					await EmployeeService.EditEmployee((int)Id, employee);
+					alert.ShowSuccessText("Account Details Changed.");
+				} else {
+					alert.ShowErrorText("Error: Invalid work day choices");
+				}
+
+			} else {
+				alert.ShowErrorText("Error: Invalid facility choice");
+			}
+
+
+		} else {
+			alert.ShowErrorText("Error: New passwords do not match.");
+		}
+	}
+
+	bool PasswordCheck()
+	{
+		if (!InputPassword.Equals(InputPasswordCheck))
+		{
+			return false;
+		}
+		return true;
+	}
+
+	bool TimeCheck() {
+		// Are the times valid within the set min and max time
+		if (employee.StartTime > DateTime.Parse(minTime) && employee.StartTime < DateTime.Parse(maxTime) 
+			&& employee.EndTime > DateTime.Parse(minTime) && employee.EndTime < DateTime.Parse(maxTime)) {
+			// is the start time less than the end time
+			if (employee.StartTime < employee.EndTime) {
+				return true;
+			}
+		}
+		alert.ShowErrorText("Please enter a valid time.");
+		return false;
+	}
+
+	void SelectWorkDay(object checkboxValue, string day) {
+		bool IsChecked = (bool)checkboxValue;
+		selectedDays[day] = IsChecked;
+	}
+
+	bool IsChecked(string day) {
+		return selectedDays.TryGetValue(day, out var IsChecked) && IsChecked;
+	}
+
+	async void FacilitySelectionChange(ChangeEventArgs e) {
+		if (e.Value != null && e.Value.ToString() != "none") {
+			selectedFacility = await FacilityService.GetFacilityById(Int32.Parse(e.Value.ToString()));
+		} else {
+			alert.ShowErrorText("Error: Invalid facility choice");
+		}
+	}
+
+	private List<string> GetSelectedWorkDays() {
+		return selectedDays.Where(kvp => kvp.Value).Select(kvp => kvp.Key).ToList();
+	}
+}

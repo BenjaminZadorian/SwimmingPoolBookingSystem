@@ -1,0 +1,73 @@
+﻿@page "/all-customers/{Name}/{Id:int}"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Employee")]
+@inject ICustomerService CustomerService
+@inject IEmployeeService EmployeeService
+@inject DataService DataService
+@attribute [StreamRendering(true)]
+
+<h3>All Customers</h3>
+
+@if(customers == null)
+{
+	<span>Loading...</span>
+}
+else if(customers.Count == 0)
+{
+	<span>No customers found.</span>
+}
+else
+{
+	<table class="table">
+		<thead>
+			<tr>
+				<th>Name</th>
+				<th>Email</th>
+				<th>Membership ID</th>
+			</tr>
+		</thead>
+		<tbody>
+			@foreach (var c in DataService.CustomerHashTable.GetAllEntries()) {
+				var customer = c.Value;
+				<tr>
+					<td>@customer.FirstName @customer.LastName</td>
+					<td>@customer.Email</td>
+					<td>@(customer.MembershipID != null ? customer.MembershipID.ToString() : "No Membership")</td>
+					<td>
+						<EditCustomerButton Name="@customer.FirstName" Id="@customer.ID"></EditCustomerButton>
+					</td>
+				</tr>
+			}
+		</tbody>
+	</table>
+}
+
+
+@code {
+	[Parameter]
+	public string Name { get; set; }
+
+	[Parameter]
+	public int Id { get; set; }
+
+	List<CustomerTable> customers = null;
+
+	protected override async Task OnInitializedAsync()
+	{
+		// If hashtable emtpy, fill with database call
+		if (!DataService.IsCustomerLoaded) {
+			customers = await CustomerService.GetAllCustomers();
+			int size = customers.Count();
+
+			DataService.InitCustomerHashTable(size);
+			foreach (var c in customers) {
+				DataService.AddCustomerData(c.LastName, c);
+			}
+		}
+		else {
+			// Call hashtable
+			customers = DataService.CustomerHashTable.GetAllEntries().Select(kvp => kvp.Value).ToList();
+		}
+	}
+
+}

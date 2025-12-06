@@ -1,0 +1,114 @@
+﻿@page "/login"
+@using System.ComponentModel.DataAnnotations
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authentication.Cookies
+@using SoftwareEngineerProject.Components.Middleware
+@inject ICustomerService CustomerService
+@inject IEmployeeService EmployeeService
+@inject NavigationManager NavigationManager
+
+<h1>Login</h1>
+<div class="row">
+    <div class="col-md-4">
+
+        <ErrorAlert @ref="alert"></ErrorAlert>
+
+        <section>
+            <EditForm Model="Input" method="post" OnValidSubmit="OnLogin" FormName="Login">
+                <DataAnnotationsValidator  />
+                <hr />
+                <div class="form-floating mb-3">
+                    <InputText @bind-Value="Input.Email" class="form-control" aria-required="true" />
+                    <label for="email" class="form-label">Email</label>
+                    <ValidationMessage For="() => Input.Email" class="text-danger" />
+                </div>
+                <div class="form-floating mb-3">
+                    <InputText type="password" @bind-Value="Input.Password" class="form-control"  aria-required="true" />
+                    <label for="password" class="form-label">Password</label>
+                    <ValidationMessage For="() => Input.Password" class="text-danger" />
+                </div>
+                <div>
+                    <button type="submit" class="w-100 btn btn-lg btn-primary">Login</button>
+                </div>
+
+                <div class="form-floating mb-3">
+                    <InputSelect id="role-select" class="form-select" @bind-Value="Input.Role" aria-required="true">
+                        <option value="Customer">Customer</option>
+                        <option value="Employee">Employee</option>
+                    </InputSelect>
+                    <label for="role" class="form-label">Role</label>
+                    <ValidationMessage For="() => Input.Role" class="text-danger" />
+                </div>
+
+            </EditForm>
+        </section>
+    </div>
+</div>
+
+@code {
+    private ErrorAlert alert;
+
+
+    [SupplyParameterFromForm]
+    private InputModel Input { get; set; } = new();
+
+    public async Task OnLogin()
+    {
+
+        object loginUser = null;
+
+
+        if (Input.Role == "Customer") {
+            loginUser = await CustomerService.VerifyLogin(Input.Email, Input.Password);
+        } else {
+            loginUser = await EmployeeService.VerifyLogin(Input.Email, Input.Password);
+        }
+
+        if (loginUser == null) {
+            alert.ShowErrorText("Login details not found.");
+            return;
+        }
+
+        string userEmail = "";
+
+        if (loginUser is CustomerTable customer) {
+            userEmail = customer.Email;
+        } else if (loginUser is EmployeeTable employee) {
+            userEmail = employee.Email;
+        }
+
+        var claim = new List<Claim>{
+            new Claim(ClaimTypes.Name, userEmail),
+            new Claim(ClaimTypes.Role, Input.Role)
+        };
+
+        var claimIdentity = new ClaimsIdentity(claim, CookieAuthenticationDefaults.AuthenticationScheme);
+
+        // Define dictionary of claims principles
+        ClaimsPrincipal claimsPrincipal = new ClaimsPrincipal(claimIdentity);
+        // key to retrieve the current user
+        Guid key = Guid.NewGuid();
+        // Assign the value of the current user with the key
+        AuthenticationMiddleware.Login[key] = claimsPrincipal;
+
+        // Navigate to the login page directed with the user's key
+        NavigationManager.NavigateTo($"/login?key={key}", true);
+
+    }
+
+    private sealed class InputModel
+    {
+        [Required]
+        [EmailAddress]
+        public string Email { get; set; } = "";
+
+        [Required]
+        [DataType(DataType.Password)]
+        public string Password { get; set; } = "";
+
+
+        [Required]
+        [DataType(DataType.Text)]
+        public string Role { get; set; } = "";
+    }
+}

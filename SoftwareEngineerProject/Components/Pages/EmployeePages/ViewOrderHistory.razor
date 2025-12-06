@@ -1,0 +1,97 @@
+﻿@page "/facility-order-history/{Name}/{Id:int}"
+@using Microsoft.AspNetCore.Authorization
+@using System.Text
+@attribute [Authorize(Roles = "Employee")]
+@inject IEmployeeService EmployeeService
+@inject ICustomerService CustomerService
+@inject IOrderService OrderService
+@inject IEquipmentService EquipmentService
+@inject IFacilityService FacilityService
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+
+@if (facility != null) {
+	<h3>@facility.Name Merchandise Order History</h3>
+	@if (allFacilityOrders != null) {
+		<table class="table table-striped">
+			<thead>
+				<tr>
+					<th>Order ID</th>
+					<th>Item</th>
+					<th>Price</th>
+					<th>Date</th>
+					<th>Customer</th>
+				</tr>
+			</thead>
+			<tbody>
+				@foreach (var o in allFacilityOrders)
+				{
+					<tr>
+						<td>@o.RowID</td>
+						<td>@o.OrderType</td>
+						<td>@o.OrderPrice</td>
+						<td>@o.OrderDate</td>
+						<td>@o.Customer?.FirstName @o.Customer?.LastName</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+		<button class="btn btn-primary" @onclick="ExportToCSV">Export Profile Information to CSV</button>
+	}
+}  	else if (employee != null && employee.FacilityID == null)
+	{
+		<p>You are not assigned to a facility</p>
+	}
+	else
+	{
+		<p>loading order history...</p>
+	}
+
+@code {
+	[Parameter]
+	public string Name { get; set; }
+
+	[Parameter]
+	public int Id { get; set; }
+
+	FacilityTable facility { get; set; }
+
+	EmployeeTable employee { get; set; }
+
+	List<OrderTable> allFacilityOrders { get; set; }
+
+	protected override async Task OnInitializedAsync()
+	{
+		employee = await EmployeeService.GetEmployeeById((int)Id);
+		if (employee.FacilityID != null)
+		{
+			facility = await FacilityService.GetFacilityById((int)employee.FacilityID);
+			allFacilityOrders = await OrderService.GetOrdersByFacility((int)employee.FacilityID);
+		}
+	}
+
+	public async Task ExportToCSV()	{
+		var csv = new StringBuilder();
+
+		csv.AppendLine("Field,Value");
+		csv.AppendLine("Order ID,Item,Price,Date,Customer,Transaction Type");
+
+		foreach (var o in allFacilityOrders)
+		{
+			var orderId = o.RowID;
+			var item = o.OrderType?.Replace(",", " "); // Remove commas to avoid breaking CSV
+			var price = o.OrderPrice;
+			var date = o.OrderDate.ToString("yyyy-MM-dd");
+			var customerName = $"{o.Customer?.FirstName} {o.Customer?.LastName}".Trim();
+
+			csv.AppendLine($"{orderId},{item},{price},{date},{customerName}");
+		}
+
+		string csvFileName = $"FacilityOrders_{DateTime.Now:yyyyMMdd}.csv";
+		byte[] csvFileBytes = Encoding.UTF8.GetBytes(csv.ToString());
+		string base64 = Convert.ToBase64String(csvFileBytes);
+		string dataURL = $"data:text/csv;base64,{base64}";
+
+		await JSRuntime.InvokeVoidAsync("downloadCsvFile", csvFileName, dataURL);
+	}
+}

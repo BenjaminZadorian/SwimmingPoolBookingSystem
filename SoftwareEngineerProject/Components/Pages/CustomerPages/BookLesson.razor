@@ -1,0 +1,155 @@
+﻿@page "/book-lesson/{Name}/{Id:int}"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Customer")]
+@inject ICustomerService CustomerService
+@inject ILessonService LessonService
+@inject ICustomerLessonService CustomerLessonService
+@inject DataService DataService
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<h3>Book Lesson</h3>
+
+<ErrorAlert @ref="alert"></ErrorAlert>
+
+@if (customerLessonTables == null || availableLessons == null)
+{
+	<p>Loading...</p>
+} else {
+	<div>
+		<h5><b>Enrolled Lessons</b></h5>
+		@if (customerLessonTables.Count() == 0) {
+			<p>You are not currently enrolled in any lessons.  Pick from the selection below to sign up.  You may only be allowed to book for up to 8 at a time.</p>
+		}
+		<table class="table table-striped">
+			<thead>
+				<tr>
+					<th>Type</th>
+					<th>Start Time</th>
+					<th>End Time</th>
+				</tr>
+			</thead>
+			<tbody>
+				@foreach (var l in customerLessonTables) {
+					<tr>
+						<td>@l.Type</td>
+						<td>@l.StartTime</td>
+						<td>@l.EndTime</td>
+						<button class="btn btn-outline-danger" @onclick="() => Cancel(l.ID)">Cancel Lesson</button>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+
+	<div>
+		<h5><b>Available Lessons</b></h5>
+		<table class="table table-striped">
+			<thead>
+				<tr>
+					<th>Type</th>
+					<th>Start Time</th>
+					<th>End Time</th>
+				</tr>
+			</thead>
+			<tbody>
+				@foreach (var l in availableLessons) {
+					<tr>
+						<td>@l.Type</td>
+						<td>@l.StartTime</td>
+						<td>@l.EndTime</td>
+						<button class="btn btn-outline-primary" @onclick="() => Enroll(l.ID, l)">Sign Up</button>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+}
+
+<style>
+	.no-list-style {
+	list-style-type: none;
+	padding-left: 0;
+	}
+</style>
+
+
+@code {
+	private ErrorAlert alert;
+
+	[Parameter]
+	public string Name { get; set; }
+
+	[Parameter]
+	public int Id { get; set; }
+
+	int maxLessonCount = 8;
+
+	CustomerTable customer { get; set; } = new CustomerTable();
+
+	List<LessonTable> availableLessons { get; set; }
+
+	List<LessonTable> customerLessonTables { get; set; }
+
+	protected override async Task OnInitializedAsync()
+	{
+
+
+		customer = await CustomerService.GetCustomerById((int)Id);
+
+		// if lesson data not loaded in hashtable, fill it from database
+		if (!DataService.IsLessonLoaded) {
+			var dbLessons = await LessonService.GetAllLessons();
+			DataService.InitLessonHashTable(maxLessonCount);
+			foreach (var l in dbLessons) {
+				DataService.AddLessonData(l.ID.ToString(), l);
+			}
+		}
+
+		// if customer lesson junction table data not in DataService, fill it from database
+		if (!DataService.IsCustomerLessonLoaded((int)Id)) {
+			List<LessonTable> enrolledLesson = await CustomerLessonService.GetLessonsByCustomer((int)Id);
+			DataService.AddCustomerLessons(Id, enrolledLesson);
+		}
+
+		customerLessonTables = DataService.GetCustomerLessons((int)Id);
+		List<LessonTable> allLessons = DataService.LessonHashTable.GetAllEntries().Select(l => l.Value).ToList();
+		availableLessons = allLessons;
+		availableLessons.RemoveAll(l => customerLessonTables.Contains(l));
+
+	}
+
+	async Task Enroll(int lID, LessonTable l) {
+		LessonTable chosenLesson =  DataService.GetLessonById(lID);
+
+		chosenLesson.PersonCount++;
+
+		await LessonService.EditLesson(lID, chosenLesson);
+
+		await CustomerLessonService.AddCustomerLesson(new CustomerLessonTable
+			{
+				CustomerID = (int)Id,
+				LessonID = lID,
+			});
+
+		DataService.CustomerLessonDict[Id].Add(chosenLesson);
+		DataService.LessonHashTable.Insert(lID.ToString(), chosenLesson);
+
+		await JS.InvokeVoidAsync("location.reload");
+	}
+
+	async Task Cancel(int lID) {
+		await CustomerLessonService.DeleteCustomerLesson((int)Id, lID);
+
+		var lessons = DataService.CustomerLessonDict[Id];
+		lessons.RemoveAll(l => l.ID == lID);
+		DataService.LessonHashTable.Delete(lID.ToString());
+
+		LessonTable lesson = await LessonService.GetLessonById(lID);
+		lesson.PersonCount--;
+		await LessonService.EditLesson(lID, lesson);
+
+		await JS.InvokeVoidAsync("location.reload");
+	}
+
+}

@@ -1,0 +1,10 @@
+﻿@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+
+<button @onclick="CreateAccount" class="btn btn-primary">Create an Account</button>
+
+@code {
+	void CreateAccount() {
+		NavigationManager.NavigateTo("/register");
+	}
+}

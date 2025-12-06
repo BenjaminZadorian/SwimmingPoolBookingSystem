@@ -1,0 +1,331 @@
+﻿@page "/shop/{Name}/{Id:int}"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Customer")]
+@inject ICustomerService CustomerService
+@inject ILockerService LockerService
+@inject IFacilityService FacilityService
+@inject IEquipmentService EquipmentService
+@inject IMerchandiseService MerchandiseService
+@inject IOrderService OrderService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<ErrorAlert @ref="alert"></ErrorAlert>
+@if (allFacilities == null) {
+	<label>loading facilities...</label>
+} else {
+	<div>
+		<p>Locker and equipment rentals are non-refundable.  You may return your equipment or locker early, but will not be refunded any money.</p>
+		<h3>-- Select a Facility --</h3>
+		<select class="form-select" @onchange="OnSelectionChange">
+			<option value="none">Select Facility</option>
+			@foreach (var f in allFacilities)
+			{
+				<option value=@f.ID>@f.Name</option>
+			}
+		</select>
+	</div>
+}
+
+@if (selectedFacilityId != 0 && selectedFacility != null) {
+	<h3>Facility: <b>@selectedFacility.Name</b></h3>
+	<section id="rentals">
+		<div>
+
+
+			@if (allEquipment != null)
+			{
+				<h4 style="text-align:center"> Rent Equipment</h4>
+				<h5 style="text-align:center">The earliest time a locker or piece of equipment can be rented is: @minTime and the latest is @maxTime</h5>
+				<div>
+					<table class="table table-striped">
+						<thead>
+							<tr>
+								<th>Type</th>
+								<th>Facility</th>
+								<th>Start Rent</th>
+								<th>End Rent</th>
+							</tr>
+						</thead>
+						<tbody>
+							@foreach(var e in rentedEquipment) {
+								<tr>
+									<td>@e.Type</td>
+									<td>@e.Facility.Name</td>
+									<td>@e.StartRent.ToString("HH:mm tt")</td>
+									<td>@e.EndRent.ToString("HH:mm tt")</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+
+				<div>
+					<div style="text-align:center">
+						<h4>Available Equipment</h4>
+						<h5><b>Note:</b></h5>
+						<p>
+							Locker rentals are only available for 1 <b>hour long periods</b>.  Lockers <b>may only be rented for the current day</b>.
+							<br />  Please select your start time for your rental period.
+						</p>
+					</div>
+
+					@if (allEquipment.Count() > 0)
+					{
+						<label style="text-align:center">Input Your Rental Start Time:</label>
+						<input style="text-align:center" type="time" @bind="startRentEquipment" min=@minTime max=@maxTime step="1800" />
+
+						<table class="table table-striped" style="width: 175%">
+							<thead>
+								<tr>
+									<th>Type</th>
+									<th>Price</th>
+								</tr>
+							</thead>
+							<tbody>
+								@foreach(var e in allEquipment) {
+									<tr>
+										<td>@e.Type</td>
+										<td>@e.Price</td>
+										<button class="btn btn-outline-primary" @onclick="() => RentEquipment(e.ID)">Rent Equipment</button>
+									</tr>
+								}
+							</tbody>
+						</table>
+					}
+					else
+					{
+						<h5 style="text-align:center">No Currently Available Equipment.</h5>
+					}
+				</div>
+			}
+			else
+			{
+				<p>loading equipment...</p>
+			}
+
+			<div style="text-align:center">
+				<h4>Rent Lockers</h4>
+
+				<label>Price Per Locker: <b>£3.50</b></label>
+			</div>
+
+			@if (allLockers != null)
+			{
+				<div>
+					<h5 style ="text-align:center">Your Rented Lockers</h5>
+					<table class="table table-striped">
+						<thead>
+							<tr>
+								<th>Locker ID</th>
+								<th>Facility</th>
+								<th>Rent Start</th>
+								<th>Rent End</th>
+							</tr>
+						</thead>
+						<tbody>
+							@foreach (var l in rentedLockers) {
+								<tr>
+									<td>@l.ID</td>
+									<td>@l.Facility.Name</td>
+									<td>@l.StartRent.ToString("HH:mm tt")</td>
+									<td>@l.EndRent.ToString("HH:mm tt")</td>
+
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+
+				<div>
+					<div style="text-align:center">
+						<h4>Available Lockers</h4>
+						<h5><b>Note:</b></h5>
+						<p>
+							Locker rentals are only available for 1 <b>hour long periods</b>.  Lockers <b>may only be rented for the current day</b>.
+							<br />  Please select your start time for your rental period.
+						</p>
+					</div>
+
+					@if (allLockers.Count() > 0)
+					{
+						<label>Input Your Rental Start Time:</label>
+						<input type="time" @bind="startRentLocker" min=@minTime max=@maxTime step="1800" />
+
+						<table class="table table-striped" style="width: 200%">
+							<thead>
+								<tr>
+									<th>Locker ID</th>
+									<th>Rent Locker</th>
+								</tr>
+							</thead>
+							<tbody>
+								@foreach (var l in allLockers){
+									<tr>
+										<td>Locker @l.ID</td>
+										<button class="btn btn-outline-primary" @onclick="() => RentLocker(l.ID)">Rent Locker</button>
+									</tr>
+								}
+							</tbody>
+						</table>
+					}
+					else
+					{
+						<h5>No Currently Available Lockers.</h5>
+					}
+
+
+				</div>
+			}
+			else
+			{
+				<p>loading lockers...</p>
+			}
+
+		</div>
+	</section>
+	<section id="shop">
+		@if (allMerchandise != null && allMerchandise.Count() > 0) {
+			<table class="table table-striped">
+				<thead>
+					<tr>
+						<th>Type</th>
+						<th>Price</th>
+						<th>Purchase Item</th>
+					</tr>
+				</thead>
+				<tbody>
+					@foreach (var m in allMerchandise){
+						<tr>
+							<td>@m.Type</td>
+							<td>@m.Price</td>
+							<button class="btn btn-outline-primary" @onclick="() => BuyMerchandise(m)">Purchase Item</button>
+						</tr>
+					}
+				</tbody>
+			</table>
+		} else {
+			<h5>No Currently Available Merchandise.</h5>
+		}
+	</section>
+}
+
+<style>
+	.no-list-style {
+	list-style-type: square;
+	padding-left: 30px;
+	padding-left: 30px;
+	}
+
+	input[type="time"] {
+	padding: 5px;
+	border-radius: 5px;
+	border: 1px solid #ccc;
+	font-size: 1rem;
+	}
+
+</style>
+
+@code {
+	private ErrorAlert alert;
+
+	[Parameter]
+	public string Name { get; set; }
+
+	[Parameter]
+	public int Id { get; set; }
+
+	public CustomerTable customer { get; set; } = new CustomerTable();
+
+	// Rental Time Variables
+	public string minTime = "08:00";
+	public string maxTime = "23:00";
+
+	public DateTime startRentLocker { get; set; }
+
+	public DateTime startRentEquipment { get; set; }
+
+	// List Variables
+	public List<LockerTable> allLockers { get; set; }
+	public List<LockerTable> rentedLockers { get; set; }
+
+	public List<EquipmentTable> allEquipment { get; set; }
+	public List<EquipmentTable> rentedEquipment { get; set; }
+
+	public List<FacilityTable> allFacilities { get; set; }
+
+	public List<MerchandiseTable> allMerchandise { get; set; }
+
+	// Selected Facility Variables
+	public int? selectedFacilityId { get; set; } = null;
+
+	public FacilityTable? selectedFacility { get; set; }
+
+	protected override async Task OnInitializedAsync() {
+		customer = await CustomerService.GetCustomerById((int)Id);
+		allFacilities = await FacilityService.GetAllFacilities();
+	}
+
+	private async Task OnSelectionChange(ChangeEventArgs e) {
+		if (e.Value != null && e.Value.ToString() != "none") {
+
+			selectedFacilityId = Int32.Parse(e.Value.ToString());
+
+			FacilityDataBundle facilityDataBundle = await FacilityService.GetFacilityBundle((int)selectedFacilityId, Id);
+
+			selectedFacility = facilityDataBundle.Facility;
+			allEquipment = facilityDataBundle.Equipment.Where(e => e.Owner == null).ToList();
+			allLockers = facilityDataBundle.Lockers.Where(l => l.Owner == null).ToList();
+			allMerchandise = facilityDataBundle.Merchandise;
+			rentedLockers = facilityDataBundle.RentedLockers;
+			rentedEquipment = facilityDataBundle.RentedEquipment;
+		}
+
+	}
+
+	private async Task RentLocker(int id) {
+		if (CheckTime('l')) {
+			await LockerService.AssignRentalTime(id, startRentLocker);
+			await LockerService.AssignOwner(id, customer);
+			await JS.InvokeVoidAsync("location.reload");
+		}
+	}
+
+	private async Task RentEquipment(int id) {
+		if (CheckTime('e')) {
+			await EquipmentService.AssignRentalTime(id, startRentEquipment);
+			await EquipmentService.AssignOwner(id, customer);
+			await JS.InvokeVoidAsync("location.reload");
+		}
+	}
+
+	private bool CheckTime(char c) {
+		if (c == 'l' && (startRentLocker < DateTime.Parse(minTime) || startRentLocker > DateTime.Parse(maxTime))) {
+			alert.ShowErrorText("Please enter a valid time.");
+			return false;
+		}
+		else if (c == 'e' && (startRentEquipment < DateTime.Parse(minTime) || startRentEquipment > DateTime.Parse(maxTime))) {
+			alert.ShowErrorText("Please enter a valid time.");
+			return false;
+		}
+		return true;
+	}
+
+	private async Task BuyMerchandise(MerchandiseTable m) {
+		OrderTable newOrder = new OrderTable 
+		{
+			OrderType = m.Type,
+			Customer = customer,
+			OrderDate = DateTime.Now,
+			OrderPrice = m.Price,
+			Facility = m.Facility,
+			FacilityId = m.FacilityId
+		};
+		await OrderService.AddOrder(newOrder);
+		await CustomerService.IncreasePurchaseCount((int)Id);
+		await MerchandiseService.DeleteMerchandise(m.ID);
+		await JS.InvokeVoidAsync("location.reload");
+	}
+
+}

@@ -1,0 +1,87 @@
+﻿@page "/cust-profile/{Name}/{Id:int}"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Customer")]
+@inject ICustomerService CustomerService
+@inject IMembershipService MembershipService
+@inject NavigationManager NavigationManager
+@inject DataService DataService
+@rendermode InteractiveServer
+
+@if (Name == null) {
+	NavigationManager.NavigateTo("/access-denied");
+} else {
+	<section class="edit-container">
+
+		<h1 for="profile">@customer.FirstName: Profile</h1>
+
+		<div id="user-info">
+			<h5 for="name">Name: @customer.FirstName @customer.LastName</h5><br />
+			<h5 for="email">Email: @customer.Email</h5><br />
+			<EditCustomerButton Name=@customer.FirstName Id="@customer.ID"></EditCustomerButton>
+		</div>
+
+		<div id="membership-info">
+			@if (customer.Membership != null) {
+				<h5 for="membership">Membership Tier: @customer.Membership.Tier</h5><br />
+				<h5 for="start-date">Start Date: @customer.StartDate</h5><br />
+				<h5 for="end-date">End Date: @customer.EndDate</h5><br />
+
+			} else {
+				<h5 for="membership">Membership Tier: Not a Member</h5><br />
+			}
+		</div>
+
+		<div id="order-history">
+			<h5 for="purchases-made">Total Purchases Made: @customer.PurchasesMade</h5><br />
+		</div>
+
+		<div id="total-history">
+			<OrderHistoryButton Name=@Name Id=@Id></OrderHistoryButton>
+		</div>
+
+	</section>
+}
+
+<style>
+	.edit-container {
+		display: flex;
+		flex-direction: column;
+		align-items: center; /* centers horizontally */
+		text-align: center;
+		gap: 0.5rem;
+	}
+
+	h5 {
+		font-size: 1.25rem;
+		font-weight: bold;
+	}
+</style>
+
+@code {
+	[Parameter]
+	public string Name { get; set; }
+
+	[Parameter]
+	public int Id { get; set; }
+
+	CustomerTable customer { get; set; } = new CustomerTable
+		{
+			FirstName = string.Empty,
+			LastName = string.Empty,
+			BirthDate = DateTime.MinValue,
+			StartDate = new DateTime(DateTime.MinValue.Ticks).AddDays(1),
+			EndDate = new DateTime(DateTime.MinValue.Ticks),
+			PurchasesMade = 0,
+			AttendanceCount = 0,
+			Membership = null
+		};
+
+	OrderTable latestOrder { get; set; }
+
+	protected override async Task OnInitializedAsync()
+	{
+		customer = await CustomerService.GetCustomerById((int) Id);
+		OrderTable latestOrder = await CustomerService.GetLatestOrder((int) Id);
+	}
+
+}

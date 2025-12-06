@@ -1,0 +1,103 @@
+﻿@page "/calendar/{Name}/{Id:int}"
+@using Microsoft.AspNetCore.Authorization
+@using System.Globalization
+@attribute [Authorize(Roles = "Customer")]
+@inject ICustomerService CustomerService
+@inject ILessonService LessonService
+@inject ICustomerLessonService CustomerLessonService
+@rendermode InteractiveServer
+
+<h3>Personal Calendar</h3>
+
+<ErrorAlert @ref="alert"></ErrorAlert>
+
+<h4>@Month @Year</h4>
+
+@if (customerLessonTables != null) {
+	<button class="btn btn-primary" @onclick="() => {currentMonth = currentMonth.AddMonths(-1); InitMonth();}">Previous Month</button>
+	<button id="button-right" class="btn btn-primary" @onclick="() => {currentMonth = currentMonth.AddMonths(1); InitMonth();}">Next Month</button>
+	<section>
+		@for (int j = 0; j < blankColCount; j++)
+		{
+			<div></div>
+		}
+
+		@for (int i = 1; i <= currentMonthEnd.Day; i++)
+		{
+			var item = customerLessonTables.FirstOrDefault(x => x.StartTime.Date == new DateTime(currentMonth.Year, currentMonth.Month, i).Date);
+
+			<div>
+				<h2>@i</h2>
+				@if (item != null)
+				{
+					<p style="color: #1b6ec2">@item.Type</p>
+				}
+			</div>
+		}
+	</section>
+} else {
+	<p>loading calendar...</p>
+}
+
+
+
+<style>
+	section {
+	display: grid;
+	grid-template-columns: repeat(7, 1fr);
+	}
+
+	section > div {
+	border: 1px solid black;
+	padding: 10px;
+	}
+
+	button {
+		margin: 20px;
+	}
+	
+	#button-right {
+		margin-left: 1250px;
+	}
+
+</style>
+
+@code {
+	private ErrorAlert alert;
+
+	[Parameter]
+	public string Name { get; set; }
+
+	[Parameter]
+	public int Id { get; set; }
+
+	string Month { get; set; } = string.Empty;
+	string Year { get; set; } = string.Empty;
+
+	DateTime currentMonth { get; set; } = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1);
+
+	DateTime currentMonthEnd { get; set; }
+
+	List<LessonTable> customerLessonTables { get; set; }
+
+	int blankColCount = 0;
+
+	protected override async Task OnInitializedAsync()
+	{
+		customerLessonTables = await CustomerLessonService.GetLessonsByCustomer((int)Id);
+		InitMonth();
+	}
+
+	private void InitMonth() {
+		int month = currentMonth.Month;
+		int year = currentMonth.Year;
+
+		currentMonthEnd = currentMonth.AddMonths(1).AddDays(-1);
+
+		Month = DateTimeFormatInfo.CurrentInfo.GetMonthName(currentMonth.Month);
+		Year = currentMonth.Year.ToString();
+
+		blankColCount = (int)currentMonth.DayOfWeek;
+		Console.WriteLine(currentMonth);
+	}
+}

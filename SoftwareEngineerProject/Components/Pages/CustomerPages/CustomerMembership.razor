@@ -1,0 +1,210 @@
+﻿@page "/membership/{Name}/{Id:int}"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Customer")]
+@inject ICustomerService CustomerService
+@inject IMembershipService MembershipService
+@inject DataService DataService
+@rendermode InteractiveServer
+
+
+<div class="member-container">
+	<h1>Membership</h1>
+	<ErrorAlert @ref="alert"></ErrorAlert>
+	@if (IsMember == false) {
+		<EditForm Model="membership" method="post" OnSubmit="PurchaseMembership" FormName="Membership">
+			<div class="form-floating mb-3">
+				<InputSelect id="tier-select" class="form-select" @bind-Value="membership.Tier" style="width: 200px; height: 60px">
+					<option value="Gold">Gold</option>
+					<option value="Silver">Silver</option>
+					<option value="Bronze">Bronze</option>
+				</InputSelect>
+				<h5 for="tier" class="form-h5">Tier</h5>
+			</div>
+
+			<div class="form-floating mb-3">
+				<InputSelect id="duration-select" class="form-select" @bind-Value="duration" style="width: 200px; height: 60px">
+					<option value="1">1</option>
+					<option value="3">3</option>
+					<option value="6">6</option>
+					<option value="12">12</option>
+				</InputSelect>
+				<h5 for="duration" class="form-h5">Duration in Months</h5>
+			</div>
+
+			<div>
+				<button type="submit" class="btn btn-primary">Submit</button>
+			</div>
+		</EditForm>
+	}
+	else {
+
+		<div>
+			<h5>Current Membership</h5>
+			<h5>Tier: @customer.Membership.Tier</h5> <br />
+			<h5>Valid Until: @customer.EndDate.ToString("dd/MM/yyyy")</h5> <br />
+		</div>
+
+		<div>
+			<h5>Extend Membership</h5>
+			<InputSelect id="extend-select" class="form-select" @bind-Value="extendDuration" style="width: 200px; height: 60px">
+				<option value="1">1</option>
+				<option value="3">3</option>
+				<option value="6">6</option>
+				<option value="12">12</option>
+			</InputSelect>
+			<h5 for="extend" class="form-h5">Extension Duration in Months</h5> <br />
+
+			<button @onclick="ExtendMembership" type="button" class="btn btn-primary">Extend Membership</button> <br />
+		</div>
+
+		<div>
+			<h5>Upgrade Membership</h5>
+			<div class="form-floating mb-3">
+				<InputSelect id="upgrade-select" class="form-select" @bind-Value="newTier" style="width: 200px; height: 60px">
+					<option value="Gold">Gold</option>
+					<option value="Silver">Silver</option>
+					<option value="Bronze">Bronze</option>
+				</InputSelect>
+				<h5 for="upgrade-tier" class="form-h5">Tier</h5>
+			</div>
+
+			<button @onclick="UpgradeMembership" type="button" class="btn btn-primary">Upgrade Membership</button> <br />
+
+		</div>
+		<h5>Delete Membership</h5>
+		<div>
+
+			<button @onclick="DeleteMembership" type="button" class="btn btn-danger">Cancel Membership</button>
+		</div>
+	}
+
+</div>
+
+<style>
+	h5 {
+	font-size: 1.25rem;
+	font-weight: bold;
+	}
+
+	.member-container {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	text-align: center;
+	gap: 0.5rem;
+	}
+
+	input, option {
+	font-size: 1.25rem;
+	}
+</style>
+
+@code {
+	private ErrorAlert alert;
+
+	[Parameter]
+	public int Id { get; set; }
+
+	[Parameter]
+	public string Name { get; set; }
+
+	[SupplyParameterFromForm]
+	private MembershipTable membership { get; set; } = new MembershipTable
+		{
+			ShowerAccess = false,
+			Tier = string.Empty,
+			PoolAccessStartTime = TimeOnly.MinValue,
+			PoolAccessEndTime = TimeOnly.MinValue
+		};
+
+	private string duration { get; set; }
+
+	private string extendDuration { get; set; } = string.Empty;
+
+	private string newTier { get; set; } = string.Empty;
+
+	private bool IsMember { get; set; }
+
+	CustomerTable customer { get; set; }
+
+	protected override async Task OnParametersSetAsync()
+	{
+		var dataService = DataService;
+
+		CustomerTable customer;
+
+		if (!dataService.CheckCustomerById(Id, out customer)) {
+			customer = await CustomerService.GetCustomerById((int)Id);
+			dataService.AddCacheCustomer(customer);
+		}
+
+		this.customer = customer;
+
+		IsMember = await CustomerService.IsMember((int)Id);
+
+		if (IsMember)
+		{
+			membership = customer.Membership;
+		}
+	}
+
+	async Task PurchaseMembership()
+	{
+		if (membership.Tier != null && duration != null) {
+			SetTierValues();
+			//no membership create new one
+			await MembershipService.AddMembership(membership);
+			await CustomerService.BookMembership((int)Id, membership, Int32.Parse(duration));
+			alert.ShowSuccessText("Membership Created");
+		} else {
+			alert.ShowErrorText("Values cannot be null.");
+		}
+	}
+
+	void SetTierValues()
+	{
+		if (membership.Tier == "Gold")
+		{
+			membership.PoolAccessStartTime = new TimeOnly(6, 0);
+			membership.PoolAccessEndTime = new TimeOnly(22, 0);
+			membership.ShowerAccess = true;
+		}
+		else if (membership.Tier == "Silver")
+		{
+			membership.PoolAccessStartTime = new TimeOnly(9, 0);
+			membership.PoolAccessEndTime = new TimeOnly(17, 0);
+			membership.ShowerAccess = true;
+		}
+		else if (membership.Tier == "Bronze")
+		{
+			membership.PoolAccessStartTime = new TimeOnly(12, 0);
+			membership.PoolAccessEndTime = new TimeOnly(15, 0);
+			membership.ShowerAccess = false;
+		}
+	}
+
+	async Task ExtendMembership()
+	{
+		if (extendDuration != string.Empty)
+		{
+			await CustomerService.ExtendMembership((int)Id, Int32.Parse(extendDuration));
+			alert.ShowSuccessText("Membership Extended");
+		}
+		else
+		{
+			alert.ShowErrorText("Not valid extension duration");
+		}
+	}
+
+	async Task DeleteMembership()
+	{
+		await CustomerService.CancelMembership((int)Id);
+		alert.ShowSuccessText("Membership Canceled");
+	}
+
+	async Task UpgradeMembership() {
+		await CustomerService.ChangeMembership((int)Id, newTier);
+		alert.ShowSuccessText("Membership Updated");
+	}
+
+}

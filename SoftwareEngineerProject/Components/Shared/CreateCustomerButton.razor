@@ -1,0 +1,11 @@
+﻿@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+
+<button @onclick="CreateCustomer" class="btn btn-primary">Create Customer</button>
+
+@code {
+	void CreateCustomer()
+	{
+		NavigationManager.NavigateTo("/edit-customer");
+	}
+}

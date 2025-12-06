@@ -1,0 +1,141 @@
+﻿@page "/edit-customer"
+@page "/edit-customer/{Name}/{Id:int}"
+@inject ICustomerService CustomerService
+@inject NavigationManager NavigationManager
+@inject DataService DataService
+@rendermode InteractiveServer
+
+<h3>Edit @customer.FirstName @customer.LastName</h3> 
+
+<ErrorAlert @ref="alert"></ErrorAlert>
+
+<EditForm Model="customer" OnSubmit="EditHandleSubmit" FormName="EditCustomer"> 
+    <div class="edit-container">
+        <h5>Edit First Name: @customer.FirstName</h5>
+        <InputText @bind-Value="customer.FirstName"></InputText> <br />
+
+        <h5>Edit Last Name: @customer.LastName</h5>
+        <InputText @bind-Value="customer.LastName"></InputText> <br />
+
+        <h5>Change Email: @customer.Email</h5>
+        <InputText @bind-Value="customer.Email"></InputText> <br />
+
+        <h5>Edit Birth Date: @customer.BirthDate</h5>
+        <InputDate @bind-Value="customer.BirthDate"></InputDate> <br />
+
+        <h5>Change Password</h5> 
+        <InputText @bind-Value="InputPassword"></InputText> <br />
+
+        <h5>Repeat New Password</h5>
+        <InputText @bind-Value="InputPasswordCheck"></InputText> <br />
+
+        <h5>Membership:</h5> <br />
+        <button type="button" class="btn btn-primary" @onclick="NavToMembership">Edit Membership</button> <br /> <br />
+
+
+        <button type="submit" class="btn btn-primary">Submit Changes</button> <br /> <br />
+
+        <button type="button" class="btn btn-danger" @onclick="DeleteCustomer">Delete Account</button> 
+    </div>
+
+</EditForm>
+
+<style>
+    h5 {
+        font-size: 1.25rem;
+        font-weight: bold;
+    }
+
+    .edit-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 0.5rem;
+    }
+    
+    input {
+        font-size: 1.25rem;
+    }
+</style>
+
+@code {
+
+    private ErrorAlert alert;
+
+    [Parameter]
+    public int Id { get; set; }
+
+    [Parameter]
+    public string Name { get; set; }
+
+    public int? Duration { get; set; }
+
+    public string? ExtendDuration { get; set; }
+
+    public string InputPassword { get; set; } = String.Empty;
+
+    public string InputPasswordCheck { get; set; } = String.Empty;
+
+
+    [SupplyParameterFromForm]
+    CustomerTable customer { get; set; } = new CustomerTable
+        {
+            FirstName = string.Empty,
+            LastName = string.Empty,
+            Email = string.Empty,
+            BirthDate = DateTime.MinValue,
+            StartDate = new DateTime(DateTime.MinValue.Ticks).AddDays(1),
+            EndDate = new DateTime(DateTime.MinValue.Ticks),
+            PurchasesMade = 0,
+            AttendanceCount = 0,
+            Membership = null
+        };
+
+    protected override async Task OnInitializedAsync()
+    {
+        customer = await CustomerService.GetCustomerById((int)Id);
+    }
+
+    async Task EditHandleSubmit()
+    {
+        if (PasswordCheck() == true)
+        {
+            // Create new salt and hashed password
+            if (InputPassword != string.Empty)
+            {
+                var (salt, hashed) = HashingService.HashPassword(InputPassword);
+                customer.Password = hashed;
+                customer.Salt = salt;
+            }
+            await CustomerService.EditCustomer((int)Id, customer);
+            alert.ShowSuccessText("Account Details Changed.");
+        }
+        else
+        {
+            alert.ShowErrorText("Error: New passwords do not match.");
+        }
+
+    }
+
+    async Task DeleteCustomer()
+    {
+        await CustomerService.DeleteCustomer((int)Id);
+        NavigationManager.NavigateTo("/");
+    }
+
+    bool PasswordCheck()
+    {
+        if (!InputPassword.Equals(InputPasswordCheck))
+        {
+            return false;
+        }
+        return true;
+    }
+
+    void NavToMembership()
+    {
+        NavigationManager.NavigateTo($"/membership/{Name}/{Id}");
+    }
+
+}

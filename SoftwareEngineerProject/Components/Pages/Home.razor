@@ -1,0 +1,206 @@
+﻿@page "/"
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ICustomerService CustomerService
+@inject IEmployeeService EmployeeService
+@inject NavigationManager nav
+@inject ILessonService LessonService
+@inject DataService DataService
+
+<CascadingAuthenticationState>
+    <AuthorizeView>
+        <NotAuthorized>
+            <div class="welcome-container">
+                <h1>Welcome to Byte Facility</h1><br />
+                <div id="guest-login">
+                    <h3>Create an Account and Get Started!</h3>
+                    <RegisterButton></RegisterButton>
+                    <h3>Or if you already have an account, click here to login!</h3>
+                    <LoginButton></LoginButton>
+                </div>
+            </div>
+
+
+            <div class="guest-advert">
+                <h3>Why Use Byte Facility?</h3>
+
+                <div id="customer-advert">
+                    <h4>As a Customer</h4>
+
+                    <h5>Convenient Booking & Scheduling</h5>
+                    <span>Book a lesson and pool with ease.  Whether you are interested in reserving a pool for a lesson or just casual swimming in a group, Byte Facility offers exactly what you need!</span>
+
+                    <h5>Easy Membership Management</h5>
+                    <span>Sign up, renew, upgrade or cancel your membership in just a few clicks.  With automated charging and email reminders, never lose track of your membership or bonuses that come alongside one.</span>
+
+                    <h5>Clear Personal Statistics</h5>
+                    <span>With Byte Facility, track all statistics from how many times you have checked in to your complete order history.  Byte Facility will keep track of your fitness journey every step of the way.</span>
+
+                    <h5>Simple Purchasing and Renting Services</h5>
+                    <span>If you are renting a locker or purchasing some equipment for a swim, Byte Facility can easily allow you to purchase from your nearest facility with concise order information sent to your email straight away.</span>
+                </div>
+
+
+                <div class="business-advert">
+                    <h4>As a Business</h4>
+
+                    <h5>Take the Stress Out of Pool Management with Byte Facility!</h5>
+                    <span>With Byte Facility, you can easily handle everything from member sign-ups to pool maintenance, all with one simple software package!</span>
+
+                    <h5>Simple and Easy Facility Management</h5>
+                    <span>Track pool lessons, check-in's and equipment statuses effortlessly.</span>
+
+                    <h5>Easy-to-Use Inventory Dashboard</h5>
+                    <span>Get real-time insights into your inventory, lockers and equipment.  See what customers have rented out lockers or equipment, and view a simple transaction history for any customer.</span>
+
+                    <h5>Scalable Customer Management</h5>
+                    <span>Whether you run just one facility or multiple, Byte Facility can adapt to whatever your needs, with scalable solutions to facility and employee management.</span>
+
+                    <h5>Efficient Membership Management</h5>
+                    <span>With hassle-free payroll, Byte Facility is the perfect choice for controlling payment schemes, bonuses and data collection for all employees. <br /> We offer many ways of exporting employee data to create an adaptable solution to employee management.</span>
+
+                </div>
+            </div>
+
+            @*Guest Styling*@
+            <style>
+                .welcome-container,
+                .guest-advert,
+                .business-advert {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                text-align: center;
+                gap: 0.5rem;
+                }
+
+                .guest-advert,
+                .business-advert {
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 2rem;
+                font-size: 1rem;
+                line-height: 1.6;
+                color: #2d2d2d;
+                background-color: #ffffff;
+                }
+
+                h3 {
+                font-size: 2.25rem;
+                font-weight: bold;
+                }
+
+                h4 {
+                font-size: 1.5rem;
+                font-weight: 500;
+                }
+
+                h5 {
+                font-size: 1.25rem;
+                font-weight: bold;
+                }
+
+                span {
+                margin-bottom: 1rem;
+                }
+            </style>
+
+        </NotAuthorized>
+    </AuthorizeView>
+
+    <AuthorizeView Roles="Customer">
+        <div class="welcome-container">
+            <h1>Welcome @customer.FirstName</h1>
+            <h2>Browse our selection of lessons and merchandise from a facility near you!</h2>
+            <h3>Click here to edit your profile</h3>
+            <EditCustomerButton Id="@Id" Name="@Name"></EditCustomerButton>
+            <h3>Or click here to view your order history!</h3>
+            <OrderHistoryButton Id="@Id" Name="@Name"></OrderHistoryButton>
+        </div>
+
+        <style>
+            .welcome-container{
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            gap: 0.5rem;
+            }
+        </style>
+
+    </AuthorizeView>
+
+
+    <AuthorizeView Roles="Employee">
+        <div class="welcome-container">
+            <h1>Welcome @employee.FirstName @employee.LastName</h1>
+            @if (employee.WorkDays != string.Empty)
+            {
+                <h5>Work Days for the Week: @employee.WorkDays</h5>
+            }
+            else
+            {
+                <h5>Not Currently Assigned to a Work Schedule.  Click below to configure.</h5>
+            }
+
+            @if (employee.StartTime != DateTime.MinValue && employee.EndTime != DateTime.MinValue)
+            {
+                <h5>Work Hours for the Week: @employee.StartTime - @employee.EndTime</h5>
+            }
+            else
+            {
+                <h5>Not Currently Assigned Work Hours.  Click below to configure.</h5>
+            }
+            <EditEmployeeButton Name="@employee.FirstName" Id="@employee.ID"></EditEmployeeButton>
+        </div>
+
+
+        <style>
+            .welcome-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center; /* centers horizontally */
+            text-align: center;
+            gap: 0.5rem;
+            }
+        </style>
+
+    </AuthorizeView>
+</CascadingAuthenticationState>
+
+@code {
+    public bool IsAuthenticated = false;
+
+    public string Name { get; set; }
+
+    public int Id { get; set; }
+
+    CustomerTable customer { get; set; }
+    EmployeeTable employee { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authenticated = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var loggedInUser = authenticated.User;
+        var loggedInRole = loggedInUser?.FindFirstValue(ClaimTypes.Role);
+        var loggedEmail = loggedInUser.Identity.Name;
+
+        IsAuthenticated = loggedInUser.Identity.IsAuthenticated;
+        if (IsAuthenticated == true)
+        {
+            if (loggedInRole == "Customer")
+            {
+                customer = await CustomerService.GetCustomerByEmail(loggedEmail);
+                Name = customer.FirstName;
+                Id = customer.ID;
+            }
+            else
+            {
+                employee = await EmployeeService.GetEmployeeByEmail(loggedEmail);
+                Name = employee.FirstName;
+                Id = employee.ID;
+            }
+        }
+    }
+}
