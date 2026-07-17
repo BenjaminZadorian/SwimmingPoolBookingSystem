@@ -1,4 +1,4 @@
-# Byte Facility
+# Gym Class Booking System
 
 This is a piece of software allowing for the management of customers, employees and other business services relating to swimming pools.  This software is useful for managing books, lessons, employee payment systems, managing inventory and many more features.
 
